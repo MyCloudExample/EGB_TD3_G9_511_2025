@@ -91,38 +91,50 @@ QueueHandle_t       cola_paginas; //Envia datos a la tarea tas_setpoint
 TaskHandle_t        taskSD = NULL; //Usando para referenciar la tarea task_guardiana_sd
 TaskHandle_t        taskLEDS = NULL; //Usado para refernecianr la tarea task_guradiana_leds
 /*---------------------------PROTOTIPO DE FUNCIONES------------------------------------------------------------------------------*/
-
+void init_hcsr04 (void);
+void init_i2c (void);
+void init_adc (void);
+void init_lcd (void);
+void init_pwm (void);
+void init_leds (void);
 /*---------------------------TAREAS DE FREERTOS----------------------------------------------------------------------------------*/
-void task_init(void) 
+void init_hcsr04 (void)
 {
-    // Inicializacion de GPIO para HC-SR04
     hc_sr04_init(&sensor,PIN_TRIG,PIN_ECHO);
-    //Inicializacion del I2C
+}
+void init_i2c (void)
+{
     i2c_init(I2C, FREQ);
     gpio_set_function(PIN_SDA, GPIO_FUNC_I2C);
     gpio_set_function(PIN_SCL, GPIO_FUNC_I2C);
     gpio_pull_up(PIN_SDA);
     gpio_pull_up(PIN_SCL);
-    //Inicializo el ADC
+}
+void init_adc (void)
+{
     adc_init();
     adc_gpio_init(PIN_ADC);
     adc_select_input(0);
-    //Inicializo el LCD
-    /*lcd_init(I2C,ADDR);
+}
+void init_lcd (void)
+{
+    lcd_init(I2C,ADDR);
     lcd_clear();
-    lcd_set_cursor(0,0);*/
-    //Inicializo el PWM
+    lcd_set_cursor(0,0);
+    printf("Dentro de init_lcd\n");
+}
+void init_pwm (void)
+{
     pwm_init_config(&cooler);
-    //COnfiguro pines de los leds banderas
+}
+void init_leds (void)
+{
     gpio_init(GPIO_LED_MAX); //Inicio el pin 16
     gpio_set_dir(GPIO_LED_MAX, GPIO_OUT); //Se configura como salida
     gpio_put(GPIO_LED_MAX, 0); // Se coloca un 0 a la salida
     gpio_init(GPIO_LED_MIN); //Inicio el pin 17
     gpio_set_dir(GPIO_LED_MIN, GPIO_OUT); //Se configura como salida
     gpio_put(GPIO_LED_MIN, 0); // Se coloca un 0 a la salida
-    //Inicializo memoria SD
-    // Elimino la tarea para liberar recursos y toma el semaforo para bloqeuar la task_guardiana_sd
-    //xSemaphoreTake(sem_memoriaSD,pdMS_TO_TICKS(0));
 }
 //----------------------------------------TAREA DE SENSANDO DE LA ALTURA------------------------------------------------------------
 void task_hcsr04(void *params)
@@ -133,7 +145,7 @@ void task_hcsr04(void *params)
         valor_medido = hc_sr04_get_distance_cm(&sensor);
         if(valor_medido == -1.0f)
         {
-            printf("Distancia fuera de rango\n");
+            //printf("Distancia fuera de rango\n");
         }
         else
         {
@@ -150,6 +162,7 @@ void task_guardiana_lcd(void *pvParameter)
     estructura_setpoint recepcion_lcd;
     char buffer[30];
     uint8_t linea4=9;
+    init_lcd();
     lcd_clear();
 
     while (true) 
@@ -624,7 +637,11 @@ int main(void)
 {
     stdio_init_all();
     configuracion_gpio_boton();
-    task_init();
+    init_hcsr04();
+    init_adc();
+    init_i2c();
+    init_leds();
+    init_pwm();
     // Creacion de colas
     queue_rtc = xQueueCreate(1,sizeof(ds3231_time_t));
     queue_hcsr04 = xQueueCreate(5,sizeof(float));
@@ -638,16 +655,15 @@ int main(void)
     sem_mutexi2c = xSemaphoreCreateMutex();
     sem_memoriaSD = xSemaphoreCreateBinary();
     // Creacion de tareas
-    //xTaskCreate(task_init, "Init", 256, NULL, 4, NULL);
     //xTaskCreate(task_SetPoint,"SetPoint",256,NULL,2,NULL);
     //xTaskCreate(task_monitor_gpio,"boton",256,NULL,2,NULL);
-    //xTaskCreate(task_hcsr04,"MedicionDeDistancia",256,NULL,2,NULL);
-    //xTaskCreate(task_guardiana_sd,"guardianaSD",2048,NULL,3,&taskSD);
-    //xTaskCreate(task_guardiana_lcd,"guardianaLCD",256,NULL,2,NULL);
+    xTaskCreate(task_hcsr04,"MedicionDeDistancia",256,NULL,2,NULL);
+    xTaskCreate(task_guardiana_sd,"guardianaSD",2048,NULL,3,&taskSD);
+    xTaskCreate(task_guardiana_lcd,"guardianaLCD",256,NULL,2,NULL);
     //xTaskCreate(task_debounce_boton, "debounce_boton", 1024, NULL, 2, NULL);
-    //xTaskCreate(task_guardiana_leds,"guardianaLEDS",256,NULL,2,&taskLEDS);
-    //xTaskCreate(task_rtc,"regsitro_fecha",256,NULL,2,NULL);
-    //xTaskCreate(task_pid,"control_pid",256,NULL,3,NULL);
+    xTaskCreate(task_guardiana_leds,"guardianaLEDS",256,NULL,2,&taskLEDS);
+    xTaskCreate(task_rtc,"regsitro_fecha",256,NULL,2,NULL);
+    xTaskCreate(task_pid,"control_pid",256,NULL,3,NULL);
     xTaskCreate(task_setpoint_uart, "UART_Receiver", 1024, NULL, 2, NULL);
 
     // Arranca el scheduler
