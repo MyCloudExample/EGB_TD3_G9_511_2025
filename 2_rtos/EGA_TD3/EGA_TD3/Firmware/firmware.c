@@ -97,6 +97,7 @@ void init_adc (void);
 void init_lcd (void);
 void init_pwm (void);
 void init_leds (void);
+bool leer_datos_uart (char* buffer, uint32_t valor);
 /*---------------------------TAREAS DE FREERTOS----------------------------------------------------------------------------------*/
 void init_hcsr04 (void)
 {
@@ -135,6 +136,53 @@ void init_leds (void)
     gpio_init(GPIO_LED_MIN); //Inicio el pin 17
     gpio_set_dir(GPIO_LED_MIN, GPIO_OUT); //Se configura como salida
     gpio_put(GPIO_LED_MIN, 0); // Se coloca un 0 a la salida
+}
+bool leer_datos_uart (char* buffer, uint32_t timeout_ms)
+{
+    static char uart_buffer[BUFFER_COMMAND];
+    static int index_buffer = 0;
+    static uint32_t last_char_time = 0;
+    
+    uint32_t current_time = to_ms_since_boot(get_absolute_time());
+    
+    // Leer todos los caracteres disponibles
+    while (uart_is_readable(UART_ID)) 
+    {
+        uint8_t received_char = uart_getc(UART_ID);
+        last_char_time = current_time;
+        
+        // Si es fin de línea, retornar el comando completo
+        if (received_char == '\n' || received_char == '\r') 
+        {
+            if (index_buffer > 0) 
+            {
+                uart_buffer[index_buffer] = '\0';
+                strncpy(buffer, uart_buffer, BUFFER_COMMAND - 1);
+                buffer[BUFFER_COMMAND - 1] = '\0'; // Asegurar terminación
+                index_buffer = 0;
+                return true; // Datos disponibles
+            }
+        }
+        // Almacenar caracter en buffer
+        else if (index_buffer < (BUFFER_COMMAND - 1)) 
+        {
+            uart_buffer[index_buffer++] = received_char;
+        }
+    }
+    
+    // Timeout: si pasó mucho tiempo desde el último carácter, limpiar buffer
+    if (index_buffer > 0 && (current_time - last_char_time) > timeout_ms) 
+    {
+        printf("[UART] Timeout - Buffer limpiado: '");
+        for(int i = 0; i < index_buffer; i++) 
+        {
+            printf("%c", uart_buffer[i]);
+        }
+        printf("'\n");
+        index_buffer = 0;
+    }
+    
+    return false; // No hay datos nuevos
 }
 //----------------------------------------TAREA DE SENSANDO DE LA ALTURA------------------------------------------------------------
 void task_hcsr04(void *params)
@@ -610,9 +658,10 @@ void task_setpoint_uart(void *pvParameters)
    
     while (true) 
     {
-        //printf("Dentro del bucle while\n");
+        
         // Leer caracteres disponibles de UART1
-        if (uart_is_readable(UART_ID)) {
+        /*if (uart_is_readable(UART_ID))
+        {
             uint8_t received_char = uart_getc(UART_ID);
             
             // Si es fin de línea, mostrar comando completo
@@ -627,7 +676,11 @@ void task_setpoint_uart(void *pvParameters)
             else if (index_buffer < (BUFFER_COMMAND - 1)) {
                 command_buffer[index_buffer++] = received_char;
             }
-        }
+        }*/
+       if(leer_datos_uart(command_buffer,100))
+       {
+        printf(">>>>Dato recibido: %s\n",command_buffer);
+       }
         
         vTaskDelay(pdMS_TO_TICKS(10));
     }
