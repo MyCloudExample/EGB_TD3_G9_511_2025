@@ -36,10 +36,11 @@
 //========================================PIN DE POTENCIOMETRO PARA EL SETPOINT=====================================================
 #define PIN_ADC     26      //Pin 31 de la placa
 //=======================================PINES PARA EL SPI=========================================================================
-/*#define PIN_TX  4           //Pin 6 de la placa
+#define PIN_TX  4           //Pin 6 de la placa
 #define PIN_RX  5           //Pin 7 de la placa
 #define UART_ID uart1       //Se utiliza el pueto UART 1
-#define UART_BAUDRATE 115200//Velocidad del UART 1*/
+#define UART_BAUDRATE 115200//Velocidad del UART 1
+#define BUFFER_COMMAND  128 //Buffer para comandos de uart
 //========================================BANDERAS DE ALERTAS=======================================================================
 #define GPIO_LED_MAX 12     //Pin 16 de la placa
 #define GPIO_LED_MIN 13     //Pin 17 de la placa
@@ -89,9 +90,10 @@ QueueHandle_t       queue_superada; //Envia la altura superada
 QueueHandle_t       cola_paginas; //Envia datos a la tarea tas_setpoint
 TaskHandle_t        taskSD = NULL; //Usando para referenciar la tarea task_guardiana_sd
 TaskHandle_t        taskLEDS = NULL; //Usado para refernecianr la tarea task_guradiana_leds
-/*----------------------------------------------------------------------------------------------------------------------------------*/
-/*----------------------------------------TAREAS DE FREERTOS------------------------------------------------------------------------*/
-void task_init(void *params) 
+/*---------------------------PROTOTIPO DE FUNCIONES------------------------------------------------------------------------------*/
+
+/*---------------------------TAREAS DE FREERTOS----------------------------------------------------------------------------------*/
+void task_init(void) 
 {
     // Inicializacion de GPIO para HC-SR04
     hc_sr04_init(&sensor,PIN_TRIG,PIN_ECHO);
@@ -106,12 +108,9 @@ void task_init(void *params)
     adc_gpio_init(PIN_ADC);
     adc_select_input(0);
     //Inicializo el LCD
-    lcd_init(I2C,ADDR);
+    /*lcd_init(I2C,ADDR);
     lcd_clear();
-    lcd_set_cursor(0,0);
-    lcd_string("UTN-FRA | TD3 | G:9");
-    for (uint32_t i = 0; i <10000000; i++)
-    {}
+    lcd_set_cursor(0,0);*/
     //Inicializo el PWM
     pwm_init_config(&cooler);
     //COnfiguro pines de los leds banderas
@@ -122,10 +121,8 @@ void task_init(void *params)
     gpio_set_dir(GPIO_LED_MIN, GPIO_OUT); //Se configura como salida
     gpio_put(GPIO_LED_MIN, 0); // Se coloca un 0 a la salida
     //Inicializo memoria SD
-    printf("Tarea elimianda\n");
     // Elimino la tarea para liberar recursos y toma el semaforo para bloqeuar la task_guardiana_sd
-    xSemaphoreTake(sem_memoriaSD,pdMS_TO_TICKS(0));
-    vTaskDelete(NULL);
+    //xSemaphoreTake(sem_memoriaSD,pdMS_TO_TICKS(0));
 }
 //----------------------------------------TAREA DE SENSANDO DE LA ALTURA------------------------------------------------------------
 void task_hcsr04(void *params)
@@ -583,12 +580,51 @@ void task_pid(void *pvParameters)
         vTaskDelay(pdMS_TO_TICKS((int)(DT*1000)));
     }               
 }
+/*----------------------------------------SETPOINT POR UART-------------------------------------------------------------------------*/
+void task_setpoint_uart(void *pvParameters)
+{
+    char command_buffer[BUFFER_COMMAND];
+    int index_buffer = 0;
+    
+    // Inicializar UART
+    uart_init(UART_ID, UART_BAUDRATE);
+    gpio_set_function(PIN_TX, GPIO_FUNC_UART);
+    gpio_set_function(PIN_RX, GPIO_FUNC_UART);
+    
+    printf("=== TAREA UART INICIADA ===\n");
+    printf("UART1 configurado - GPIO TX:%d, RX:%d\n", PIN_TX, PIN_RX);
+    printf("Esperando datos por UART...\n");
+   
+    while (true) 
+    {
+        //printf("Dentro del bucle while\n");
+        // Leer caracteres disponibles de UART1
+        if (uart_is_readable(UART_ID)) {
+            uint8_t received_char = uart_getc(UART_ID);
+            
+            // Si es fin de línea, mostrar comando completo
+            if (received_char == '\n' || received_char == '\r') {
+                if (index_buffer > 0) {
+                    command_buffer[index_buffer] = '\0';
+                    printf(">>> DATO RECIBIDO POR UART: '%s'\n", command_buffer);
+                    index_buffer = 0;
+                }
+            }
+            // Almacenar caracter en buffer
+            else if (index_buffer < (BUFFER_COMMAND - 1)) {
+                command_buffer[index_buffer++] = received_char;
+            }
+        }
+        
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
 /*----------------------------------------PROGRAMA PRINCIPAL------------------------------------------------------------------------*/
 int main(void) 
 {
     stdio_init_all();
     configuracion_gpio_boton();
-
+    task_init();
     // Creacion de colas
     queue_rtc = xQueueCreate(1,sizeof(ds3231_time_t));
     queue_hcsr04 = xQueueCreate(5,sizeof(float));
@@ -602,16 +638,17 @@ int main(void)
     sem_mutexi2c = xSemaphoreCreateMutex();
     sem_memoriaSD = xSemaphoreCreateBinary();
     // Creacion de tareas
-    xTaskCreate(task_init, "Init", 256, NULL, 4, NULL);
-    xTaskCreate(task_SetPoint,"SetPoint",256,NULL,2,NULL);
+    //xTaskCreate(task_init, "Init", 256, NULL, 4, NULL);
+    //xTaskCreate(task_SetPoint,"SetPoint",256,NULL,2,NULL);
     //xTaskCreate(task_monitor_gpio,"boton",256,NULL,2,NULL);
     //xTaskCreate(task_hcsr04,"MedicionDeDistancia",256,NULL,2,NULL);
-    xTaskCreate(task_guardiana_sd,"guardianaSD",2048,NULL,3,&taskSD);
-    xTaskCreate(task_guardiana_lcd,"guardianaLCD",256,NULL,2,NULL);
-    xTaskCreate(task_debounce_boton, "debounce_boton", 1024, NULL, 2, NULL);
-    xTaskCreate(task_guardiana_leds,"guardianaLEDS",256,NULL,2,&taskLEDS);
-    xTaskCreate(task_rtc,"regsitro_fecha",256,NULL,2,NULL);
-    xTaskCreate(task_pid,"control_pid",256,NULL,3,NULL);
+    //xTaskCreate(task_guardiana_sd,"guardianaSD",2048,NULL,3,&taskSD);
+    //xTaskCreate(task_guardiana_lcd,"guardianaLCD",256,NULL,2,NULL);
+    //xTaskCreate(task_debounce_boton, "debounce_boton", 1024, NULL, 2, NULL);
+    //xTaskCreate(task_guardiana_leds,"guardianaLEDS",256,NULL,2,&taskLEDS);
+    //xTaskCreate(task_rtc,"regsitro_fecha",256,NULL,2,NULL);
+    //xTaskCreate(task_pid,"control_pid",256,NULL,3,NULL);
+    xTaskCreate(task_setpoint_uart, "UART_Receiver", 1024, NULL, 2, NULL);
 
     // Arranca el scheduler
     vTaskStartScheduler();
