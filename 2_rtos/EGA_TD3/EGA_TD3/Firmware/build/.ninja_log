@@ -874,3 +874,9 @@
 45046	45698	7841725261779320	pico_sd_fatfs/CMakeFiles/pico_sd_fatfs.dir/715ab2c4cb6e8f8e6f1d896168e0d7ec/cmsis/stub/CMSIS/Device/RP2350/Source/system_RP2350.c.obj	18b9820096b4f5e8
 104	2077	7851056553169274	CMakeFiles/firmware.dir/firmware.c.obj	573c55fdf02c808c
 2078	4039	7851056572884587	firmware.elf	680de519b0d05827
+109	835	7851086905673078	CMakeFiles/firmware.dir/firmware.c.obj	573c55fdf02c808c
+836	1710	7851086912839252	firmware.elf	680de519b0d05827
+92	586	7851091401631005	CMakeFiles/firmware.dir/firmware.c.obj	573c55fdf02c808c
+586	1047	7851091406574803	firmware.elf	680de519b0d05827
+131	653	7851092829394880	CMakeFiles/firmware.dir/firmware.c.obj	573c55fdf02c808c
+653	1347	7851092834620320	firmware.elf	680de519b0d05827
