@@ -91,13 +91,13 @@ QueueHandle_t       cola_paginas; //Envia datos a la tarea tas_setpoint
 TaskHandle_t        taskSD = NULL; //Usando para referenciar la tarea task_guardiana_sd
 TaskHandle_t        taskLEDS = NULL; //Usado para refernecianr la tarea task_guradiana_leds
 /*---------------------------PROTOTIPO DE FUNCIONES------------------------------------------------------------------------------*/
-void init_hcsr04 (void);
-void init_i2c (void);
-void init_adc (void);
-void init_lcd (void);
-void init_pwm (void);
-void init_leds (void);
-bool leer_datos_uart (char* buffer, uint32_t valor);
+void init_hcsr04 (void); //Inicializa el HC-SR04
+void init_i2c (void);   //Inicializa el I2C
+void init_adc (void);   //Inicializa el ADC
+void init_lcd (void);   //Inicializa el LCD
+void init_pwm (void);   //Inicializa el PWM
+void init_leds (void);  //Inicializa LEDS de superacion de limites
+bool leer_datos_uart (char* buffer, uint32_t valor);    //Lectura de datos por UART
 /*---------------------------TAREAS DE FREERTOS----------------------------------------------------------------------------------*/
 void init_hcsr04 (void)
 {
@@ -658,28 +658,9 @@ void task_setpoint_uart(void *pvParameters)
    
     while (true) 
     {
-        
-        // Leer caracteres disponibles de UART1
-        /*if (uart_is_readable(UART_ID))
-        {
-            uint8_t received_char = uart_getc(UART_ID);
-            
-            // Si es fin de línea, mostrar comando completo
-            if (received_char == '\n' || received_char == '\r') {
-                if (index_buffer > 0) {
-                    command_buffer[index_buffer] = '\0';
-                    printf(">>> DATO RECIBIDO POR UART: '%s'\n", command_buffer);
-                    index_buffer = 0;
-                }
-            }
-            // Almacenar caracter en buffer
-            else if (index_buffer < (BUFFER_COMMAND - 1)) {
-                command_buffer[index_buffer++] = received_char;
-            }
-        }*/
        if(leer_datos_uart(command_buffer,100))
        {
-        printf(">>>>Dato recibido: %s\n",command_buffer);
+            printf(">>>>Dato recibido: %s\n",command_buffer);
        }
         
         vTaskDelay(pdMS_TO_TICKS(10));
