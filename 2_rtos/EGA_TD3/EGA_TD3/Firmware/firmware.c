@@ -327,19 +327,31 @@ bool leer_datos_uart (char* buffer, uint32_t timeout_ms)
 //----------------------------------------TAREA DE SENSANDO DE LA ALTURA------------------------------------------------------------
 void task_hcsr04(void *params)
 { float valor_medido=0.0;
+  float valor_corregido=0.0;  
 
     while (true)
     {
         valor_medido = hc_sr04_get_distance_cm(&sensor);
-        if(valor_medido == -1.0f)
+        if(valor_medido<= 2.0f && valor_medido >= SENSOR_HEIGHT -2.0f) 
+        {
+            printf("Valor fuera de escala\n");
+        }
+        else
+        {
+            valor_corregido = SENSOR_HEIGHT - valor_medido;
+            xQueueOverwrite(queue_superada,&valor_corregido);
+            //printf("Valor enviadp a tasK_guardiana_leds:%.2f\n",valor_corregido);
+            //xQueueSend(queue_superada,&valor_corregido,pdMS_TO_TICKS(1));
+        }
+        /*if(valor_medido == -1.0f)
         {
             //printf("Distancia fuera de rango\n");
         }
         else
         {
-            printf("Tarea: task_hcssr04, Distancia= %.2f cm\n",valor_medido);
-            xQueueSend(queue_hcsr04,&valor_medido,pdMS_TO_TICKS(100));
-        }
+            //printf("Tarea: task_hcssr04, Distancia= %.2f cm\n",valor_medido);
+            xQueueSend(queue_superada,&valor_medido,pdMS_TO_TICKS(100));
+        }*/
         vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
@@ -471,6 +483,7 @@ void task_guardiana_leds(void *params)
 {
     estructura_setpoint data, AlturaSuperada, aux;
     float altura = 0, alturaMax = 0, alturaMin = 0;
+    hc_sr04_init(&sensor, PIN_TRIG, PIN_ECHO);
     gpio_init(GPIO_LED_MAX); //Inicio el pin 16
     gpio_set_dir(GPIO_LED_MAX, GPIO_OUT); //Se configura como salida
     gpio_put(GPIO_LED_MAX, 0); // Se coloca un 0 a la salida
@@ -485,33 +498,35 @@ void task_guardiana_leds(void *params)
             //printf("TARGET:%lu,MAX:%.2f,MIN:%.2f",data.setpoint,data.setpoint_max,data.setpoint_min);
         }
 
-        if (xQueueReceive(queue_hcsr04, &altura, portMAX_DELAY) == pdPASS) 
-        {
+        if (xQueueReceive(queue_hcsr04, &altura, portMAX_DELAY) == pdPASS)
+        {   //Alerta de altura maxima
             if(altura > data.setpoint_max)
             {
                 gpio_put(GPIO_LED_MAX,true);
-                data.altura_medida = altura;
+                printf("Altura Maxima Superada:%.2f, Altura:%.2f\n",data.setpoint_max, altura);
+                /*data.altura_medida = altura;
                 data.guardado = 1;
                 if(xQueueSend(queue_superada,&data,pdMS_TO_TICKS(0) == pdPASS))
                 {
                     xSemaphoreGive(sem_memoriaSD);
-                }
+                }*/
             }
             if(altura < data.setpoint_max)
             {
                 gpio_put(GPIO_LED_MAX,false);
                 xQueueReceive(queue_superada,&aux,pdMS_TO_TICKS(0));
             }
-            if(altura < data.setpoint_min)
+            //Alerta de altura inferior a la minima
+            /*if(altura < data.setpoint_min)
             {
                 gpio_put(GPIO_LED_MIN,true);
-                //vTaskDelay(pdMS_TO_TICKS(100));
+                printf("Minimo no superado:%.2f, Altura:%.2f\n",data.setpoint_min, altura);
             }
             if(altura > data.setpoint_min)
             {
                 gpio_put(GPIO_LED_MIN,false);
                 //vTaskDelay(pdMS_TO_TICKS(100));
-            }
+            }*/
         }
 
     }
@@ -813,6 +828,32 @@ void task_setpoint_uart(void *pvParameters)
                 // POR AHORA SOLO MOSTRAMOS LOS DATOS - NO ENVIAMOS A COLAS
                 printf(">>> (Los datos están listos para enviar a las colas)\n");
                 
+                //parametro para el LCD
+                config_uart.linea = 1;
+                config_uart.guardado = 0;
+                config_uart.altura_medida = 0;
+                //Envio configuracion del seteo al LCD
+                if(xQueueSend(queue_setpoint,&config_uart, pdMS_TO_TICKS(100)) == pdPASS)
+                {
+                    printf(">>>Enviado a LCD\n");
+                }
+                //Envio configuracion al PID
+                if (xQueueSend(queue_pid, &config_uart, pdMS_TO_TICKS(100)) == pdPASS) 
+                {
+                    printf(">>> ✓ Enviado a control PID - Setpoint: %lu\n", config_uart.setpoint);
+                }
+                //Envio configuracion a los leds
+                if (xQueueSend(queue_leds, &config_uart, pdMS_TO_TICKS(100)) == pdPASS) 
+                {
+                    printf(">>> ✓ Enviado a LEDs de alerta\n");
+                    // Esto activará los LEDs cuando la altura supere setpoint_max o setpoint_min
+                }
+                //Envio datos para guardar en la SD, totalmente innesesario
+                if (xQueueSend(queue_sd, &config_uart, pdMS_TO_TICKS(100)) == pdPASS) 
+                {
+                    xSemaphoreGive(sem_memoriaSD);
+                    printf(">>> ✓ Enviado a memoria SD para guardar\n");
+                }
             } 
             else 
             {
@@ -820,7 +861,6 @@ void task_setpoint_uart(void *pvParameters)
                 printf(">>> FORMATO ESPERADO: SP:valor,SM:valor,Sm:valor\n");
                 printf(">>> EJEMPLO: SP:20,SM:21,Sm:19\n");
             }
-            
             // Limpiar buffer para siguiente recepción
             memset(command_buffer, 0, sizeof(command_buffer));
        }
@@ -840,11 +880,11 @@ int main(void)
     init_pwm();
     // Creacion de colas
     queue_rtc = xQueueCreate(1,sizeof(ds3231_time_t));
-    queue_hcsr04 = xQueueCreate(5,sizeof(float));
+    queue_hcsr04 = xQueueCreate(1,sizeof(float));
     queue_setpoint = xQueueCreate(5,sizeof(estructura_setpoint));
     queue_leds = xQueueCreate(5,sizeof(estructura_setpoint));
     queue_sd = xQueueCreate(1,sizeof(estructura_setpoint));
-    queue_superada = xQueueCreate(1,sizeof(estructura_setpoint));
+    queue_superada = xQueueCreate(5,sizeof(estructura_setpoint));
     queue_pid = xQueueCreate(1,sizeof(estructura_setpoint));
     cola_paginas = xQueueCreate(1, sizeof(uint8_t));   // cola que posee una unica posicion para memorizar el cambio de paginas
     //xQueueOverwrite(cola_paginas, &pagina);
