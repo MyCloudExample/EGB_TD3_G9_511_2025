@@ -36,10 +36,11 @@
 //========================================PIN DE POTENCIOMETRO PARA EL SETPOINT=====================================================
 #define PIN_ADC     26      //Pin 31 de la placa
 //=======================================PINES PARA EL SPI=========================================================================
-/*#define PIN_TX  4           //Pin 6 de la placa
+#define PIN_TX  4           //Pin 6 de la placa
 #define PIN_RX  5           //Pin 7 de la placa
 #define UART_ID uart1       //Se utiliza el pueto UART 1
-#define UART_BAUDRATE 115200//Velocidad del UART 1*/
+#define UART_BAUDRATE 115200//Velocidad del UART 1
+#define BUFFER_COMMAND  128 //Buffer para comandos de uart
 //========================================BANDERAS DE ALERTAS=======================================================================
 #define GPIO_LED_MAX 12     //Pin 16 de la placa
 #define GPIO_LED_MIN 13     //Pin 17 de la placa
@@ -89,60 +90,268 @@ QueueHandle_t       queue_superada; //Envia la altura superada
 QueueHandle_t       cola_paginas; //Envia datos a la tarea tas_setpoint
 TaskHandle_t        taskSD = NULL; //Usando para referenciar la tarea task_guardiana_sd
 TaskHandle_t        taskLEDS = NULL; //Usado para refernecianr la tarea task_guradiana_leds
-/*----------------------------------------------------------------------------------------------------------------------------------*/
-/*----------------------------------------TAREAS DE FREERTOS------------------------------------------------------------------------*/
-void task_init(void *params) 
+/*---------------------------PROTOTIPO DE FUNCIONES------------------------------------------------------------------------------*/
+void init_hcsr04 (void); //Inicializa el HC-SR04
+void init_i2c (void);   //Inicializa el I2C
+void init_adc (void);   //Inicializa el ADC
+void init_lcd (void);   //Inicializa el LCD
+void init_pwm (void);   //Inicializa el PWM
+void init_leds (void);  //Inicializa LEDS de superacion de limites
+bool leer_datos_uart (char* buffer, uint32_t valor);    //Lectura de datos por UART
+int procesar_comando_uart (const char* comando, estructura_setpoint* condig); //Asigna los valores al seteo
+/*---------------------------TAREAS DE FREERTOS----------------------------------------------------------------------------------*/
+void init_hcsr04 (void)
 {
-    // Inicializacion de GPIO para HC-SR04
     hc_sr04_init(&sensor,PIN_TRIG,PIN_ECHO);
-    //Inicializacion del I2C
+}
+void init_i2c (void)
+{
     i2c_init(I2C, FREQ);
     gpio_set_function(PIN_SDA, GPIO_FUNC_I2C);
     gpio_set_function(PIN_SCL, GPIO_FUNC_I2C);
     gpio_pull_up(PIN_SDA);
     gpio_pull_up(PIN_SCL);
-    //Inicializo el ADC
+}
+void init_adc (void)
+{
     adc_init();
     adc_gpio_init(PIN_ADC);
     adc_select_input(0);
-    //Inicializo el LCD
+}
+void init_lcd (void)
+{
     lcd_init(I2C,ADDR);
     lcd_clear();
     lcd_set_cursor(0,0);
-    lcd_string("UTN-FRA | TD3 | G:9");
-    for (uint32_t i = 0; i <10000000; i++)
-    {}
-    //Inicializo el PWM
+    printf("Dentro de init_lcd\n");
+}
+void init_pwm (void)
+{
     pwm_init_config(&cooler);
-    //COnfiguro pines de los leds banderas
+}
+void init_leds (void)
+{
     gpio_init(GPIO_LED_MAX); //Inicio el pin 16
     gpio_set_dir(GPIO_LED_MAX, GPIO_OUT); //Se configura como salida
     gpio_put(GPIO_LED_MAX, 0); // Se coloca un 0 a la salida
     gpio_init(GPIO_LED_MIN); //Inicio el pin 17
     gpio_set_dir(GPIO_LED_MIN, GPIO_OUT); //Se configura como salida
     gpio_put(GPIO_LED_MIN, 0); // Se coloca un 0 a la salida
-    //Inicializo memoria SD
-    printf("Tarea elimianda\n");
-    // Elimino la tarea para liberar recursos y toma el semaforo para bloqeuar la task_guardiana_sd
-    xSemaphoreTake(sem_memoriaSD,pdMS_TO_TICKS(0));
-    vTaskDelete(NULL);
 }
+/*bool leer_datos_uart (char* buffer, uint32_t timeout_ms)
+{
+    static char uart_buffer[BUFFER_COMMAND];
+    static int index_buffer = 0;
+    static uint32_t last_char_time = 0;
+    
+    uint32_t current_time = to_ms_since_boot(get_absolute_time());
+    
+    // Leer todos los caracteres disponibles
+    while (uart_is_readable(UART_ID)) 
+    {
+        uint8_t received_char = uart_getc(UART_ID);
+        last_char_time = current_time;
+        
+        // Si es fin de línea, retornar el comando completo
+        if (received_char == '\n' || received_char == '\r') 
+        {
+            if (index_buffer > 0) 
+            {
+                uart_buffer[index_buffer] = '\0';
+                strncpy(buffer, uart_buffer, BUFFER_COMMAND - 1);
+                buffer[BUFFER_COMMAND - 1] = '\0'; // Asegurar terminación
+                index_buffer = 0;
+                return true; // Datos disponibles
+            }
+        }
+        // Almacenar caracter en buffer
+        else if (index_buffer < (BUFFER_COMMAND - 1)) 
+        {
+            uart_buffer[index_buffer++] = received_char;
+        }
+    }
+    
+    // Timeout: si pasó mucho tiempo desde el último carácter, limpiar buffer
+    if (index_buffer > 0 && (current_time - last_char_time) > timeout_ms) 
+    {
+        printf("[UART] Timeout - Buffer limpiado: '");
+        for(int i = 0; i < index_buffer; i++) 
+        {
+            printf("%c", uart_buffer[i]);
+        }
+        printf("'\n");
+        index_buffer = 0;
+    }
+    
+    return false; // No hay datos nuevos
+}*/
+int procesar_comando_uart (const char* comando, estructura_setpoint* config)
+{
+   if (comando == NULL || config == NULL) 
+    {
+        return -1; // Error: parámetros inválidos
+    }
+    
+    // Hacer una copia para no modificar el original
+    char buffer[64];
+    if (strlen(comando) >= sizeof(buffer)) 
+    {
+        return -2; // Error: comando demasiado largo
+    }
+    strcpy(buffer, comando);
+    
+    // Limpiar caracteres de retorno de carro y nueva línea
+    for(int i = 0; buffer[i] != '\0'; i++) 
+    {
+        if(buffer[i] == '\r' || buffer[i] == '\n') 
+        {
+            buffer[i] = '\0';
+            break;
+        }
+    }
+    
+    printf(">>> Buffer limpio: '%s'\n", buffer);
+    
+    // Variables temporales para almacenar los valores
+    int sp_valor = 0;
+    int sm_max_valor = 0;
+    int sm_min_valor = 0;
+    
+    int sp_encontrado = 0;
+    int sm_max_encontrado = 0;
+    int sm_min_encontrado = 0;
+    
+    // Tokenizar la cadena usando coma como separador
+    char* token = strtok(buffer, ",");
+    
+    while (token != NULL) 
+    {
+        printf(">>> Procesando token: '%s'\n", token);
+        
+        // Buscar SP: (setpoint)
+        if (strstr(token, "SP:") == token) 
+        {
+            sp_valor = atoi(token + 3); // +3 para saltar "SP:"
+            sp_encontrado = 1;
+            printf(">>> Encontrado SP: %d\n", sp_valor);
+        }
+        // Buscar SM: (setpoint máximo)
+        else if (strstr(token, "SM:") == token) 
+        {
+            sm_max_valor = atoi(token + 3); // +3 para saltar "SM:"
+            sm_max_encontrado = 1;
+            printf(">>> Encontrado SM: %d\n", sm_max_valor);
+        }
+        // Buscar Sm: (setpoint mínimo)
+        else if (strstr(token, "Sm:") == token)
+        {
+            sm_min_valor = atoi(token + 3); // +3 para saltar "Sm:"
+            sm_min_encontrado = 1;
+            printf(">>> Encontrado Sm: %d\n", sm_min_valor);
+        }
+        else 
+        {
+            printf(">>> Token desconocido: %s\n", token);
+        }
+        
+        token = strtok(NULL, ",");
+    }
+    
+    // Actualizar la estructura solo si se encontraron todos los parámetros
+    if (sp_encontrado && sm_max_encontrado && sm_min_encontrado) 
+    {
+        config->setpoint = sp_valor;
+        config->setpoint_min = (float)sm_min_valor;
+        config->setpoint_max = (float)sm_max_valor;
+        printf(">>> Asignación completada:\n");
+        printf(">>>   SP -> setpoint: %lu\n", config->setpoint);
+        printf(">>>   SM -> setpoint_max: %.2f\n", config->setpoint_max);
+        printf(">>>   Sm -> setpoint_min: %.2f\n", config->setpoint_min);
+        return 0; // Éxito
+    } 
+    else 
+    {
+        printf(">>> Faltan parámetros: SP=%d, SM=%d, Sm=%d\n", 
+               sp_encontrado, sm_max_encontrado, sm_min_encontrado);
+        return -3; // Error: faltan parámetros
+    }
+}
+bool leer_datos_uart (char* buffer, uint32_t timeout_ms)
+{
+    static char uart_buffer[BUFFER_COMMAND];
+    static int index_buffer = 0;
+    static uint32_t last_char_time = 0;
+    
+    uint32_t current_time = to_ms_since_boot(get_absolute_time());
+    
+    // Leer todos los caracteres disponibles
+    while (uart_is_readable(UART_ID)) 
+    {
+        uint8_t received_char = uart_getc(UART_ID);
+        last_char_time = current_time;
+        
+        // Si es fin de línea, retornar el comando completo
+        if (received_char == '\n' || received_char == '\r') 
+        {
+            if (index_buffer > 0) 
+            {
+                uart_buffer[index_buffer] = '\0';
+                strncpy(buffer, uart_buffer, BUFFER_COMMAND - 1);
+                buffer[BUFFER_COMMAND - 1] = '\0'; // Asegurar terminación
+                index_buffer = 0;
+                return true; // Datos disponibles
+            }
+        }
+        // Almacenar caracter en buffer (solo caracteres imprimibles)
+        else if (index_buffer < (BUFFER_COMMAND - 1) && received_char >= 32 && received_char <= 126) 
+        {
+            uart_buffer[index_buffer++] = received_char;
+        }
+    }
+    
+    // Timeout: si pasó mucho tiempo desde el último carácter, limpiar buffer
+    if (index_buffer > 0 && (current_time - last_char_time) > timeout_ms) 
+    {
+        printf("[UART] Timeout - Buffer limpiado: '");
+        for(int i = 0; i < index_buffer; i++) 
+        {
+            printf("%c", uart_buffer[i]);
+        }
+        printf("'\n");
+        index_buffer = 0;
+    }
+    
+    return false; // No hay datos nuevos
+}
+/*===========================FUNCIONES QUE DEFINEN A LAS TAREAS==================================================================*/
 //----------------------------------------TAREA DE SENSANDO DE LA ALTURA------------------------------------------------------------
 void task_hcsr04(void *params)
 { float valor_medido=0.0;
+  float valor_corregido=0.0;  
 
     while (true)
     {
         valor_medido = hc_sr04_get_distance_cm(&sensor);
-        if(valor_medido == -1.0f)
+        if(valor_medido<= 2.0f && valor_medido >= SENSOR_HEIGHT -2.0f) 
         {
-            printf("Distancia fuera de rango\n");
+            printf("Valor fuera de escala\n");
         }
         else
         {
-            printf("Tarea: task_hcssr04, Distancia= %.2f cm\n",valor_medido);
-            xQueueSend(queue_hcsr04,&valor_medido,pdMS_TO_TICKS(100));
+            valor_corregido = SENSOR_HEIGHT - valor_medido;
+            xQueueOverwrite(queue_superada,&valor_corregido);
+            //printf("Valor enviadp a tasK_guardiana_leds:%.2f\n",valor_corregido);
+            //xQueueSend(queue_superada,&valor_corregido,pdMS_TO_TICKS(1));
         }
+        /*if(valor_medido == -1.0f)
+        {
+            //printf("Distancia fuera de rango\n");
+        }
+        else
+        {
+            //printf("Tarea: task_hcssr04, Distancia= %.2f cm\n",valor_medido);
+            xQueueSend(queue_superada,&valor_medido,pdMS_TO_TICKS(100));
+        }*/
         vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
@@ -153,6 +362,7 @@ void task_guardiana_lcd(void *pvParameter)
     estructura_setpoint recepcion_lcd;
     char buffer[30];
     uint8_t linea4=9;
+    init_lcd();
     lcd_clear();
 
     while (true) 
@@ -273,6 +483,7 @@ void task_guardiana_leds(void *params)
 {
     estructura_setpoint data, AlturaSuperada, aux;
     float altura = 0, alturaMax = 0, alturaMin = 0;
+    hc_sr04_init(&sensor, PIN_TRIG, PIN_ECHO);
     gpio_init(GPIO_LED_MAX); //Inicio el pin 16
     gpio_set_dir(GPIO_LED_MAX, GPIO_OUT); //Se configura como salida
     gpio_put(GPIO_LED_MAX, 0); // Se coloca un 0 a la salida
@@ -287,33 +498,35 @@ void task_guardiana_leds(void *params)
             //printf("TARGET:%lu,MAX:%.2f,MIN:%.2f",data.setpoint,data.setpoint_max,data.setpoint_min);
         }
 
-        if (xQueueReceive(queue_hcsr04, &altura, portMAX_DELAY) == pdPASS) 
-        {
+        if (xQueueReceive(queue_hcsr04, &altura, portMAX_DELAY) == pdPASS)
+        {   //Alerta de altura maxima
             if(altura > data.setpoint_max)
             {
                 gpio_put(GPIO_LED_MAX,true);
-                data.altura_medida = altura;
+                printf("Altura Maxima Superada:%.2f, Altura:%.2f\n",data.setpoint_max, altura);
+                /*data.altura_medida = altura;
                 data.guardado = 1;
                 if(xQueueSend(queue_superada,&data,pdMS_TO_TICKS(0) == pdPASS))
                 {
                     xSemaphoreGive(sem_memoriaSD);
-                }
+                }*/
             }
             if(altura < data.setpoint_max)
             {
                 gpio_put(GPIO_LED_MAX,false);
                 xQueueReceive(queue_superada,&aux,pdMS_TO_TICKS(0));
             }
-            if(altura < data.setpoint_min)
+            //Alerta de altura inferior a la minima
+            /*if(altura < data.setpoint_min)
             {
                 gpio_put(GPIO_LED_MIN,true);
-                //vTaskDelay(pdMS_TO_TICKS(100));
+                printf("Minimo no superado:%.2f, Altura:%.2f\n",data.setpoint_min, altura);
             }
             if(altura > data.setpoint_min)
             {
                 gpio_put(GPIO_LED_MIN,false);
                 //vTaskDelay(pdMS_TO_TICKS(100));
-            }
+            }*/
         }
 
     }
@@ -583,35 +796,111 @@ void task_pid(void *pvParameters)
         vTaskDelay(pdMS_TO_TICKS((int)(DT*1000)));
     }               
 }
+/*----------------------------------------SETPOINT POR UART-------------------------------------------------------------------------*/
+void task_setpoint_uart(void *pvParameters)
+{
+    char command_buffer[BUFFER_COMMAND];
+    int index_buffer = 0;
+    estructura_setpoint config_uart = {0};
+    int resultado_procesamiento ;
+    // Inicializar UART
+    uart_init(UART_ID, UART_BAUDRATE);
+    gpio_set_function(PIN_TX, GPIO_FUNC_UART);
+    gpio_set_function(PIN_RX, GPIO_FUNC_UART);
+    
+    printf("=== TAREA UART INICIADA ===\n");
+    printf("UART1 configurado - GPIO TX:%d, RX:%d\n", PIN_TX, PIN_RX);
+    printf("Esperando datos por UART...\n");
+   
+    while (true) 
+    {
+       if(leer_datos_uart(command_buffer,100))
+       {
+            printf(">>>>Dato recibido: %s\n",command_buffer);
+            resultado_procesamiento = procesar_comando_uart(command_buffer, &config_uart);
+            if (resultado_procesamiento == 0) 
+            {
+                printf(">>> PROCESAMIENTO EXITOSO - Estructura actualizada:\n");
+                printf(">>>   setpoint: %lu\n", config_uart.setpoint);
+                printf(">>>   setpoint_max: %.2f\n", config_uart.setpoint_max);
+                printf(">>>   setpoint_min: %.2f\n", config_uart.setpoint_min);
+                
+                // POR AHORA SOLO MOSTRAMOS LOS DATOS - NO ENVIAMOS A COLAS
+                printf(">>> (Los datos están listos para enviar a las colas)\n");
+                
+                //parametro para el LCD
+                config_uart.linea = 1;
+                config_uart.guardado = 0;
+                config_uart.altura_medida = 0;
+                //Envio configuracion del seteo al LCD
+                if(xQueueSend(queue_setpoint,&config_uart, pdMS_TO_TICKS(100)) == pdPASS)
+                {
+                    printf(">>>Enviado a LCD\n");
+                }
+                //Envio configuracion al PID
+                if (xQueueSend(queue_pid, &config_uart, pdMS_TO_TICKS(100)) == pdPASS) 
+                {
+                    printf(">>> ✓ Enviado a control PID - Setpoint: %lu\n", config_uart.setpoint);
+                }
+                //Envio configuracion a los leds
+                if (xQueueSend(queue_leds, &config_uart, pdMS_TO_TICKS(100)) == pdPASS) 
+                {
+                    printf(">>> ✓ Enviado a LEDs de alerta\n");
+                    // Esto activará los LEDs cuando la altura supere setpoint_max o setpoint_min
+                }
+                //Envio datos para guardar en la SD, totalmente innesesario
+                if (xQueueSend(queue_sd, &config_uart, pdMS_TO_TICKS(100)) == pdPASS) 
+                {
+                    xSemaphoreGive(sem_memoriaSD);
+                    printf(">>> ✓ Enviado a memoria SD para guardar\n");
+                }
+            } 
+            else 
+            {
+                printf(">>> ERROR EN PROCESAMIENTO: Código %d\n", resultado_procesamiento);
+                printf(">>> FORMATO ESPERADO: SP:valor,SM:valor,Sm:valor\n");
+                printf(">>> EJEMPLO: SP:20,SM:21,Sm:19\n");
+            }
+            // Limpiar buffer para siguiente recepción
+            memset(command_buffer, 0, sizeof(command_buffer));
+       }
+        
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
 /*----------------------------------------PROGRAMA PRINCIPAL------------------------------------------------------------------------*/
 int main(void) 
 {
     stdio_init_all();
     configuracion_gpio_boton();
-
+    init_hcsr04();
+    init_adc();
+    init_i2c();
+    init_leds();
+    init_pwm();
     // Creacion de colas
     queue_rtc = xQueueCreate(1,sizeof(ds3231_time_t));
-    queue_hcsr04 = xQueueCreate(5,sizeof(float));
+    queue_hcsr04 = xQueueCreate(1,sizeof(float));
     queue_setpoint = xQueueCreate(5,sizeof(estructura_setpoint));
     queue_leds = xQueueCreate(5,sizeof(estructura_setpoint));
     queue_sd = xQueueCreate(1,sizeof(estructura_setpoint));
-    queue_superada = xQueueCreate(1,sizeof(estructura_setpoint));
+    queue_superada = xQueueCreate(5,sizeof(estructura_setpoint));
     queue_pid = xQueueCreate(1,sizeof(estructura_setpoint));
     cola_paginas = xQueueCreate(1, sizeof(uint8_t));   // cola que posee una unica posicion para memorizar el cambio de paginas
     //xQueueOverwrite(cola_paginas, &pagina);
     sem_mutexi2c = xSemaphoreCreateMutex();
     sem_memoriaSD = xSemaphoreCreateBinary();
     // Creacion de tareas
-    xTaskCreate(task_init, "Init", 256, NULL, 4, NULL);
-    xTaskCreate(task_SetPoint,"SetPoint",256,NULL,2,NULL);
+    //xTaskCreate(task_SetPoint,"SetPoint",256,NULL,2,NULL);
     //xTaskCreate(task_monitor_gpio,"boton",256,NULL,2,NULL);
-    //xTaskCreate(task_hcsr04,"MedicionDeDistancia",256,NULL,2,NULL);
-    xTaskCreate(task_guardiana_sd,"guardianaSD",2048,NULL,3,&taskSD);
+    xTaskCreate(task_hcsr04,"MedicionDeDistancia",256,NULL,2,NULL);
+    //xTaskCreate(task_guardiana_sd,"guardianaSD",2048,NULL,3,&taskSD);
     xTaskCreate(task_guardiana_lcd,"guardianaLCD",256,NULL,2,NULL);
-    xTaskCreate(task_debounce_boton, "debounce_boton", 1024, NULL, 2, NULL);
+    //xTaskCreate(task_debounce_boton, "debounce_boton", 1024, NULL, 2, NULL);
     xTaskCreate(task_guardiana_leds,"guardianaLEDS",256,NULL,2,&taskLEDS);
     xTaskCreate(task_rtc,"regsitro_fecha",256,NULL,2,NULL);
     xTaskCreate(task_pid,"control_pid",256,NULL,3,NULL);
+    xTaskCreate(task_setpoint_uart, "UART_Receiver", 1024, NULL, 2, NULL);
 
     // Arranca el scheduler
     vTaskStartScheduler();
