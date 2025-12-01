@@ -2,8 +2,8 @@ from flask import Flask, render_template, redirect, url_for, Response, request, 
 from datetime import datetime
 import os
 import logging
-import serial
 import time
+import select
 
 app = Flask(__name__)
 
@@ -16,7 +16,7 @@ maximo = 6
 ruta_historial = "comandos_logs.csv"
 ruta_estado = "current_state.csv"
 ruta_conexiones = "flask_connections.log"
-ruta_modulo = "/dev/rpi_uart"
+ruta_modulo = "/dev/egb"
 
 # === CONFIGURAR LOGGING DE FLASK ===
 logging.basicConfig(
@@ -26,99 +26,81 @@ logging.basicConfig(
 )
 log = logging.getLogger()
 
-# Variable global para conexión UART
-uart_connection = None
+# Variable global para conexión driver
+driver_fd = None
 
-# === INICIALIZAR UART ===
-def inicializar_uart():
-    global uart_connection
+# === INICIALIZAR COMUNICACIÓN CON DRIVER ===
+def inicializar_driver():
+    global driver_fd
     try:
-        uart_connection = serial.Serial(
-            port=ruta_modulo,
-            baudrate=115200,  # CAMBIADO de 9600 a 115200 para coincidir con el driver
-            parity=serial.PARITY_NONE,
-            stopbits=serial.STOPBITS_ONE,
-            bytesize=serial.EIGHTBITS,
-            timeout=1,
-            write_timeout=1
-        )
-        # Pequeña pausa para inicialización
-        time.sleep(0.5)
-        log.info("✅ Conexión UART inicializada correctamente a 115200 bauds")
+        driver_fd = os.open(ruta_modulo, os.O_RDWR)
+        log.info("✅ Conectado al driver UART personalizado")
         return True
     except Exception as e:
-        log.error(f"❌ Error inicializando UART: {str(e)}")
-        uart_connection = None
+        log.error(f"❌ Error conectando al driver: {str(e)}")
+        driver_fd = None
         return False
 
-# === VERIFICAR CONEXIÓN UART ===
-def verificar_conexion_uart():
-    """Verificar que la conexión UART esté activa"""
-    global uart_connection
-    if uart_connection is None or not uart_connection.is_open:
-        return inicializar_uart()
+# === VERIFICAR CONEXIÓN DRIVER ===
+def verificar_conexion_driver():
+    """Verificar que la conexión con el driver esté activa"""
+    global driver_fd
+    if driver_fd is None:
+        return inicializar_driver()
     return True
 
-# === ENVIAR POR UART ===
-def enviar_uart(comando):
-    global uart_connection
+# === ENVIAR POR DRIVER ===
+def enviar_driver(comando):
+    global driver_fd
     
-    # Si no hay conexión, intentar inicializar
-    if not verificar_conexion_uart():
+    if not verificar_conexion_driver():
         return False
     
     try:
-        # Asegurarse de que la conexión esté abierta
-        if not uart_connection.is_open:
-            uart_connection.open()
-        
-        # Enviar comando
         comando_formateado = comando + '\n'
-        uart_connection.write(comando_formateado.encode())
-        uart_connection.flush()
-        
-        log.info(f"📤 UART enviado: {comando}")
+        bytes_escritos = os.write(driver_fd, comando_formateado.encode())
+        log.info(f"📤 Driver enviado: {comando} ({bytes_escritos} bytes)")
         return True
-        
     except Exception as e:
-        log.error(f"❌ Error enviando por UART: {str(e)}")
-        uart_connection = None  # Forzar reconexión
+        log.error(f"❌ Error enviando por driver: {str(e)}")
+        driver_fd = None
         return False
+
+# === LEER RESPUESTA DEL DRIVER ===
+def leer_respuesta_driver():
+    global driver_fd
+    try:
+        # Intentar leer si hay datos disponibles
+        time.sleep(0.1)  # Pequeña pausa para que lleguen datos
+        if select.select([driver_fd], [], [], 0.1)[0]:
+            respuesta = os.read(driver_fd, 1024).decode().strip()
+            if respuesta:
+                log.info(f"📥 Driver responde: {respuesta}")
+                return respuesta
+    except Exception as e:
+        log.warning(f"⚠️ Error leyendo respuesta driver: {e}")
+    return None
 
 # === ENVIAR COMANDO SEGURO CON REINTENTOS ===
 def enviar_comando_seguro(comando, max_reintentos=3):
     """Enviar comando con reintentos en caso de fallo"""
     for intento in range(max_reintentos):
-        if enviar_uart(comando):
+        if enviar_driver(comando):
             return True
         else:
-            log.warning(f"🔄 Reintentando envío UART ({intento + 1}/{max_reintentos})")
+            log.warning(f"🔄 Reintentando envío driver ({intento + 1}/{max_reintentos})")
             time.sleep(0.5)
     
-    log.error(f"❌ Fallo en envío UART después de {max_reintentos} intentos")
+    log.error(f"❌ Fallo en envío driver después de {max_reintentos} intentos")
     return False
-
-# === LEER RESPUESTA UART ===
-def leer_respuesta_uart():
-    """Intentar leer respuesta del Pico si hay datos disponibles"""
-    global uart_connection
-    try:
-        if uart_connection and uart_connection.in_waiting > 0:
-            respuesta = uart_connection.readline().decode().strip()
-            if respuesta:
-                log.info(f"📥 Pico responde: {respuesta}")
-                return respuesta
-    except Exception as e:
-        log.warning(f"⚠️ Error leyendo respuesta UART: {e}")
-    return None
 
 # Crear encabezado de CSV si no existe
 if not os.path.exists(ruta_historial):
     with open(ruta_historial, "w") as f:
         f.write("timestamp,set_target,set_minimo,set_maximo\n")
 
-# Intentar inicializar UART al inicio
-inicializar_uart()
+# Intentar inicializar driver al inicio
+inicializar_driver()
 
 @app.route('/')
 def index():
@@ -198,18 +180,18 @@ def ejecutar():
     with open(ruta_estado, "w") as f:
         f.write(f"set target {target}, set minimo {minimo}, set maximo {maximo}")
 
-    # ENVÍO UART MEJORADO CON REINTENTOS
+    # ENVÍO MEJORADO CON REINTENTOS
     comando = f"SP:{target},SM:{maximo},Sm:{minimo}"
     if enviar_comando_seguro(comando):
         log.info(f"✅ Comando enviado correctamente: {comando}")
         
         # Intentar leer respuesta del Pico
         time.sleep(0.2)  # Dar tiempo para respuesta
-        respuesta = leer_respuesta_uart()
+        respuesta = leer_respuesta_driver()
         if respuesta:
             log.info(f"✅ Pico confirmó: {respuesta}")
     else:
-        log.error(f"❌ No se pudo enviar comando por UART: {comando}")
+        log.error(f"❌ No se pudo enviar comando por driver: {comando}")
 
     log.info(f"EJECUTAR → target={target}, minimo={minimo}, maximo={maximo}")
     return redirect(url_for('index'))
@@ -225,7 +207,7 @@ def comando_personalizado():
             
             # Leer respuesta si existe
             time.sleep(0.2)
-            respuesta = leer_respuesta_uart()
+            respuesta = leer_respuesta_driver()
             
             return jsonify({
                 "status": "success", 
@@ -259,13 +241,12 @@ def ver_conexiones():
 # === ESTADO DEL SISTEMA ===
 @app.route('/estado_sistema')
 def estado_sistema():
-    """Endpoint para verificar el estado del sistema UART"""
-    estado_uart = "Conectado" if (uart_connection and uart_connection.is_open) else "Desconectado"
+    """Endpoint para verificar el estado del sistema"""
+    estado_driver = "Conectado" if driver_fd is not None else "Desconectado"
     
     info_sistema = {
-        "uart_estado": estado_uart,
+        "driver_estado": estado_driver,
         "puerto": ruta_modulo,
-        "baudrate": 115200,
         "target_actual": target,
         "minimo_actual": minimo,
         "maximo_actual": maximo
@@ -273,18 +254,16 @@ def estado_sistema():
     
     return jsonify(info_sistema)
 
-# === CERRAR UART AL SALIR ===
+# === CERRAR DRIVER AL SALIR ===
 import atexit
 
 @atexit.register
-def cerrar_uart():
-    global uart_connection
-    if uart_connection and uart_connection.is_open:
-        uart_connection.close()
-        log.info("🔌 Conexión UART cerrada correctamente")
+def cerrar_driver():
+    global driver_fd
+    if driver_fd is not None:
+        os.close(driver_fd)
+        log.info("🔌 Conexión driver cerrada correctamente")
 
 if __name__ == '__main__':
-    log.info("🚀 Servidor Flask iniciado con soporte UART mejorado")
-    app.run(host='0.0.0.0', port=5002, debug=True)
-    # http://192.168.0.11:5002/
-    #http://td3raspi4.local:5002/
+    log.info("🚀 Servidor Flask iniciado con soporte para driver personalizado")
+    app.run(host='0.0.0.0', port=5003, debug=True)

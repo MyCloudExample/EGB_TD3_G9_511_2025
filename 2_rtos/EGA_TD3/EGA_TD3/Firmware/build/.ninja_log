@@ -1,13 +1,13 @@
 # ninja log v6
+50283	51375	7841725314136309	CMakeFiles/firmware.dir/C_/Users/nahue/.pico-sdk/sdk/2.1.1/lib/tinyusb/src/device/usbd_control.c.obj	6ee9be764d309aa2
 2678	3475	7841724838098230	freertos/CMakeFiles/freertos.dir/C_/Users/nahue/.pico-sdk/sdk/2.1.1/src/rp2_common/hardware_watchdog/watchdog.c.obj	aa5a3bd94bcb7b42
 13743	14157	7841724948738804	HC_SR04/CMakeFiles/HC_SR04.dir/C_/Users/nahue/.pico-sdk/sdk/2.1.1/src/rp2_common/hardware_ticks/ticks.c.obj	a0d51c3b24f5c35e
 147	349	7841724812744444	pico-sdk/src/rp2350/boot_stage2/CMakeFiles/bs2_default.dir/compile_time_choice.S.obj	d1f2e16ad8339ec5
-50283	51375	7841725314136309	CMakeFiles/firmware.dir/C_/Users/nahue/.pico-sdk/sdk/2.1.1/lib/tinyusb/src/device/usbd_control.c.obj	6ee9be764d309aa2
+37331	40545	7841725184752921	pico_sd_fatfs/CMakeFiles/pico_sd_fatfs.dir/845e246603d0e25219a80f4ff3827e5e/src/sd_driver/SPI/sd_card_spi.c.obj	417ec6ec32903641
+614	729	7841724818406290	pico-sdk/src/rp2350/boot_stage2/bs2_default_padded_checksummed.S	44e434a844497891
 2457	3051	7841724835905993	freertos/CMakeFiles/freertos.dir/C_/Users/nahue/.pico-sdk/sdk/2.1.1/src/common/pico_util/queue.c.obj	6dd69d72edbed5ae
 928	1032	7734487543050910	C:/Users/nahue/Desktop/Accesos Directos/GitHUB/EGA/Software/EGA_TD3/Firmware/build/pico-sdk/src/rp2350/boot_stage2/bs2_default_padded_checksummed.S	71302716076e53d2
 13941	14356	7841724950729185	HC_SR04/CMakeFiles/HC_SR04.dir/C_/Users/nahue/.pico-sdk/sdk/2.1.1/src/rp2_common/hardware_xosc/xosc.c.obj	875037606e400447
-614	729	7841724818406290	pico-sdk/src/rp2350/boot_stage2/bs2_default_padded_checksummed.S	44e434a844497891
-37331	40545	7841725184752921	pico_sd_fatfs/CMakeFiles/pico_sd_fatfs.dir/845e246603d0e25219a80f4ff3827e5e/src/sd_driver/SPI/sd_card_spi.c.obj	417ec6ec32903641
 226	1611	7776875800683891	pico_sd_fatfs/CMakeFiles/pico_sd_fatfs.dir/d538063513c52271cd18e9cd427ff910/Software/EGA_TD3/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico/src/sd_driver/SPI/my_spi.c.obj	830d18e5dfb47844
 752	1566	7841724818837999	freertos/CMakeFiles/freertos.dir/stream_buffer.c.obj	63ca8dfb674e8349
 27638	28559	7841725087707019	pico-rv32ima/ps2/CMakeFiles/ps2.dir/C_/Users/nahue/.pico-sdk/sdk/2.1.1/src/rp2_common/pico_cxx_options/new_delete.cpp.obj	b0ff13573cb80dc7
@@ -308,7 +308,7 @@
 53688	54461	7841725348285477	pico-rv32ima/CMakeFiles/pico-rv32ima.dir/C_/Users/nahue/.pico-sdk/sdk/2.1.1/src/common/hardware_claim/claim.c.obj	fc3b3f4122c04657
 1083	1228	7729377641500709	C:/Users/nahue/Desktop/Accesos Directos/GitHUB/Practicas_Rasberry/EGA_TD3/Firmware/build/pico-sdk/src/rp2350/boot_stage2/bs2_default_padded_checksummed.S	38aef3d77371ffc2
 18629	19019	7841724997599695	pico-rv32ima/petitfatfs/CMakeFiles/petitfatfs.dir/C_/Users/nahue/.pico-sdk/sdk/2.1.1/src/rp2_common/pico_double/double_sci_m33.S.obj	ba084952aa79e920
-158	4823	7858202837828013	build.ninja	a3afe589ea28b283
+158	4823	7859004025244336	build.ninja	a3afe589ea28b283
 5268	5773	7841724863993321	lcd/CMakeFiles/lcd.dir/C_/Users/nahue/.pico-sdk/sdk/2.1.1/src/common/hardware_claim/claim.c.obj	6d28d6e6c0780fee
 5322	5785	7841724864547734	lcd/CMakeFiles/lcd.dir/C_/Users/nahue/.pico-sdk/sdk/2.1.1/src/rp2_common/hardware_sync/sync.c.obj	2e54672324a874c2
 33145	33684	7841725142754839	pid_controller/CMakeFiles/pid_controller.dir/C_/Users/nahue/.pico-sdk/sdk/2.1.1/src/rp2_common/hardware_sync/sync.c.obj	426cd1df456857a7
@@ -872,3 +872,9 @@
 40011	41336	7841725211551556	pico_sd_fatfs/CMakeFiles/pico_sd_fatfs.dir/6d22f95f4e01bb31389dfe0054f360b4/EGA_TD3/EGA_TD3/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico/src/src/glue.c.obj	8c2069e67ff63531
 36575	45531	7841725177073392	pico_sd_fatfs/CMakeFiles/pico_sd_fatfs.dir/017a55e8432a805c0f56745acfd45d43/EGA_TD3/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico/src/ff15/source/ff.c.obj	daa33dd900387a8a
 45046	45698	7841725261779320	pico_sd_fatfs/CMakeFiles/pico_sd_fatfs.dir/715ab2c4cb6e8f8e6f1d896168e0d7ec/cmsis/stub/CMSIS/Device/RP2350/Source/system_RP2350.c.obj	18b9820096b4f5e8
+136	2564	7859008219441174	CMakeFiles/firmware.dir/firmware.c.obj	573c55fdf02c808c
+2565	4525	7859008243823379	firmware.elf	680de519b0d05827
+124	641	7859009297708951	CMakeFiles/firmware.dir/firmware.c.obj	573c55fdf02c808c
+642	1007	7859009302864284	firmware.elf	680de519b0d05827
+127	859	7859025289535814	CMakeFiles/firmware.dir/firmware.c.obj	573c55fdf02c808c
+860	2465	7859025296874052	firmware.elf	680de519b0d05827

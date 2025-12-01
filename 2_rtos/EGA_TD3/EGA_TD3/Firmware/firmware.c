@@ -897,7 +897,7 @@ int main(void)
     xTaskCreate(task_guardiana_sd,"guardianaSD",2048,NULL,3,&taskSD);
     xTaskCreate(task_guardiana_lcd,"guardianaLCD",256,NULL,2,NULL);
     //xTaskCreate(task_debounce_boton, "debounce_boton", 1024, NULL, 2, NULL);
-    xTaskCreate(task_guardiana_leds,"guardianaLEDS",256,NULL,2,&taskLEDS);
+    //xTaskCreate(task_guardiana_leds,"guardianaLEDS",256,NULL,2,&taskLEDS);
     xTaskCreate(task_rtc,"regsitro_fecha",256,NULL,2,NULL);
     xTaskCreate(task_pid,"control_pid",256,NULL,3,NULL);
     xTaskCreate(task_setpoint_uart, "UART_Receiver", 1024, NULL, 2, NULL);
