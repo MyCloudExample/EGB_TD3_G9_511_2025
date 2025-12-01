@@ -97,15 +97,6 @@ QueueHandle_t       queue_superada; //Envia la altura superada
 QueueHandle_t       cola_paginas; //Envia datos a la tarea tas_setpoint
 TaskHandle_t        taskSD = NULL; //Usando para referenciar la tarea task_guardiana_sd
 TaskHandle_t        taskLEDS = NULL; //Usado para refernecianr la tarea task_guradiana_leds
-<<<<<<< HEAD
-/*----------------------------------------------------------------------------------------------------------------------------------*/
-/*----------------------------------------TAREAS DE FREERTOS------------------------------------------------------------------------*/
-void task_init(void *params) 
-{
-    // Inicializacion de GPIO para HC-SR04
-    hc_sr04_init(&sensor,PIN_TRIG,PIN_ECHO);
-    //Inicializacion del I2C
-=======
 /*---------------------------PROTOTIPO DE FUNCIONES------------------------------------------------------------------------------*/
 void init_hcsr04 (void); //Inicializa el HC-SR04
 void init_i2c (void);   //Inicializa el I2C
@@ -122,28 +113,11 @@ void init_hcsr04 (void)
 }
 void init_i2c (void)
 {
->>>>>>> 1f5dba881d209f6cae4df136e52be0351c8e6ae8
     i2c_init(I2C, FREQ);
     gpio_set_function(PIN_SDA, GPIO_FUNC_I2C);
     gpio_set_function(PIN_SCL, GPIO_FUNC_I2C);
     gpio_pull_up(PIN_SDA);
     gpio_pull_up(PIN_SCL);
-<<<<<<< HEAD
-    //Inicializo el ADC
-    adc_init();
-    adc_gpio_init(PIN_ADC);
-    adc_select_input(0);
-    //Inicializo el LCD
-    lcd_init(I2C,ADDR);
-    lcd_clear();
-    lcd_set_cursor(0,0);
-    lcd_string("UTN-FRA | TD3 | G:9");
-    for (uint32_t i = 0; i <10000000; i++)
-    {}
-    //Inicializo el PWM
-    pwm_init_config(&cooler);
-    //COnfiguro pines de los leds banderas
-=======
 }
 void init_adc (void)
 {
@@ -164,24 +138,12 @@ void init_pwm (void)
 }
 void init_leds (void)
 {
->>>>>>> 1f5dba881d209f6cae4df136e52be0351c8e6ae8
     gpio_init(GPIO_LED_MAX); //Inicio el pin 16
     gpio_set_dir(GPIO_LED_MAX, GPIO_OUT); //Se configura como salida
     gpio_put(GPIO_LED_MAX, 0); // Se coloca un 0 a la salida
     gpio_init(GPIO_LED_MIN); //Inicio el pin 17
     gpio_set_dir(GPIO_LED_MIN, GPIO_OUT); //Se configura como salida
     gpio_put(GPIO_LED_MIN, 0); // Se coloca un 0 a la salida
-<<<<<<< HEAD
-    //Inicializo memoria SD
-    printf("Tarea elimianda\n");
-    // Elimino la tarea para liberar recursos y toma el semaforo para bloqeuar la task_guardiana_sd
-    xSemaphoreTake(sem_memoriaSD,pdMS_TO_TICKS(0));
-    vTaskDelete(NULL);
-}
-//----------------------------------------TAREA DE SENSANDO DE LA ALTURA------------------------------------------------------------
-void task_hcsr04(void *params)
-{ float valor_medido=0.0;
-=======
 }
 /*bool leer_datos_uart (char* buffer, uint32_t timeout_ms)
 {
@@ -373,22 +335,10 @@ bool leer_datos_uart (char* buffer, uint32_t timeout_ms)
 void task_hcsr04(void *params)
 { float valor_medido=0.0;
   float valor_corregido=0.0;  
->>>>>>> 1f5dba881d209f6cae4df136e52be0351c8e6ae8
 
     while (true)
     {
         valor_medido = hc_sr04_get_distance_cm(&sensor);
-<<<<<<< HEAD
-        if(valor_medido == -1.0f)
-        {
-            printf("Distancia fuera de rango\n");
-        }
-        else
-        {
-            printf("Tarea: task_hcssr04, Distancia= %.2f cm\n",valor_medido);
-            xQueueSend(queue_hcsr04,&valor_medido,pdMS_TO_TICKS(100));
-        }
-=======
         if(valor_medido<= 2.0f && valor_medido >= SENSOR_HEIGHT -2.0f) 
         {
             printf("Valor fuera de escala\n");
@@ -409,7 +359,6 @@ void task_hcsr04(void *params)
             //printf("Tarea: task_hcssr04, Distancia= %.2f cm\n",valor_medido);
             xQueueSend(queue_superada,&valor_medido,pdMS_TO_TICKS(100));
         }*/
->>>>>>> 1f5dba881d209f6cae4df136e52be0351c8e6ae8
         vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
@@ -420,10 +369,7 @@ void task_guardiana_lcd(void *pvParameter)
     estructura_setpoint recepcion_lcd;
     char buffer[30];
     uint8_t linea4=9;
-<<<<<<< HEAD
-=======
     init_lcd();
->>>>>>> 1f5dba881d209f6cae4df136e52be0351c8e6ae8
     lcd_clear();
 
     while (true) 
@@ -544,10 +490,7 @@ void task_guardiana_leds(void *params)
 {
     estructura_setpoint data, AlturaSuperada, aux;
     float altura = 0, alturaMax = 0, alturaMin = 0;
-<<<<<<< HEAD
-=======
     hc_sr04_init(&sensor, PIN_TRIG, PIN_ECHO);
->>>>>>> 1f5dba881d209f6cae4df136e52be0351c8e6ae8
     gpio_init(GPIO_LED_MAX); //Inicio el pin 16
     gpio_set_dir(GPIO_LED_MAX, GPIO_OUT); //Se configura como salida
     gpio_put(GPIO_LED_MAX, 0); // Se coloca un 0 a la salida
@@ -562,14 +505,6 @@ void task_guardiana_leds(void *params)
             //printf("TARGET:%lu,MAX:%.2f,MIN:%.2f",data.setpoint,data.setpoint_max,data.setpoint_min);
         }
 
-<<<<<<< HEAD
-        if (xQueueReceive(queue_hcsr04, &altura, portMAX_DELAY) == pdPASS) 
-        {
-            if(altura > data.setpoint_max)
-            {
-                gpio_put(GPIO_LED_MAX,true);
-                data.altura_medida = altura;
-=======
         if (xQueueReceive(queue_hcsr04, &altura, portMAX_DELAY) == pdPASS)
         {   //Alerta de altura maxima
             if(altura > data.setpoint_max)
@@ -577,44 +512,28 @@ void task_guardiana_leds(void *params)
                 gpio_put(GPIO_LED_MAX,true);
                 printf("Altura Maxima Superada:%.2f, Altura:%.2f\n",data.setpoint_max, altura);
                 /*data.altura_medida = altura;
->>>>>>> 1f5dba881d209f6cae4df136e52be0351c8e6ae8
                 data.guardado = 1;
                 if(xQueueSend(queue_superada,&data,pdMS_TO_TICKS(0) == pdPASS))
                 {
                     xSemaphoreGive(sem_memoriaSD);
-<<<<<<< HEAD
-                }
-=======
                 }*/
->>>>>>> 1f5dba881d209f6cae4df136e52be0351c8e6ae8
             }
             if(altura < data.setpoint_max)
             {
                 gpio_put(GPIO_LED_MAX,false);
                 xQueueReceive(queue_superada,&aux,pdMS_TO_TICKS(0));
             }
-<<<<<<< HEAD
-            if(altura < data.setpoint_min)
-            {
-                gpio_put(GPIO_LED_MIN,true);
-                //vTaskDelay(pdMS_TO_TICKS(100));
-=======
             //Alerta de altura inferior a la minima
             /*if(altura < data.setpoint_min)
             {
                 gpio_put(GPIO_LED_MIN,true);
                 printf("Minimo no superado:%.2f, Altura:%.2f\n",data.setpoint_min, altura);
->>>>>>> 1f5dba881d209f6cae4df136e52be0351c8e6ae8
             }
             if(altura > data.setpoint_min)
             {
                 gpio_put(GPIO_LED_MIN,false);
                 //vTaskDelay(pdMS_TO_TICKS(100));
-<<<<<<< HEAD
-            }
-=======
             }*/
->>>>>>> 1f5dba881d209f6cae4df136e52be0351c8e6ae8
         }
 
     }
@@ -884,8 +803,6 @@ void task_pid(void *pvParameters)
         vTaskDelay(pdMS_TO_TICKS((int)(DT*1000)));
     }               
 }
-<<<<<<< HEAD
-=======
 /*----------------------------------------SETPOINT POR UART-------------------------------------------------------------------------*/
 void task_setpoint_uart(void *pvParameters)
 {
@@ -958,22 +875,11 @@ void task_setpoint_uart(void *pvParameters)
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
->>>>>>> 1f5dba881d209f6cae4df136e52be0351c8e6ae8
 /*----------------------------------------PROGRAMA PRINCIPAL------------------------------------------------------------------------*/
 int main(void) 
 {
     stdio_init_all();
     configuracion_gpio_boton();
-<<<<<<< HEAD
-
-    // Creacion de colas
-    queue_rtc = xQueueCreate(1,sizeof(ds3231_time_t));
-    queue_hcsr04 = xQueueCreate(5,sizeof(float));
-    queue_setpoint = xQueueCreate(5,sizeof(estructura_setpoint));
-    queue_leds = xQueueCreate(5,sizeof(estructura_setpoint));
-    queue_sd = xQueueCreate(1,sizeof(estructura_setpoint));
-    queue_superada = xQueueCreate(1,sizeof(estructura_setpoint));
-=======
     init_hcsr04();
     init_adc();
     init_i2c();
@@ -986,25 +892,12 @@ int main(void)
     queue_leds = xQueueCreate(5,sizeof(estructura_setpoint));
     queue_sd = xQueueCreate(1,sizeof(estructura_setpoint));
     queue_superada = xQueueCreate(5,sizeof(estructura_setpoint));
->>>>>>> 1f5dba881d209f6cae4df136e52be0351c8e6ae8
     queue_pid = xQueueCreate(1,sizeof(estructura_setpoint));
     cola_paginas = xQueueCreate(1, sizeof(uint8_t));   // cola que posee una unica posicion para memorizar el cambio de paginas
     //xQueueOverwrite(cola_paginas, &pagina);
     sem_mutexi2c = xSemaphoreCreateMutex();
     sem_memoriaSD = xSemaphoreCreateBinary();
     // Creacion de tareas
-<<<<<<< HEAD
-    xTaskCreate(task_init, "Init", 256, NULL, 4, NULL);
-    xTaskCreate(task_SetPoint,"SetPoint",256,NULL,2,NULL);
-    //xTaskCreate(task_monitor_gpio,"boton",256,NULL,2,NULL);
-    //xTaskCreate(task_hcsr04,"MedicionDeDistancia",256,NULL,2,NULL);
-    xTaskCreate(task_guardiana_sd,"guardianaSD",2048,NULL,3,&taskSD);
-    xTaskCreate(task_guardiana_lcd,"guardianaLCD",256,NULL,2,NULL);
-    xTaskCreate(task_debounce_boton, "debounce_boton", 1024, NULL, 2, NULL);
-    xTaskCreate(task_guardiana_leds,"guardianaLEDS",256,NULL,2,&taskLEDS);
-    xTaskCreate(task_rtc,"regsitro_fecha",256,NULL,2,NULL);
-    xTaskCreate(task_pid,"control_pid",256,NULL,3,NULL);
-=======
     //xTaskCreate(task_SetPoint,"SetPoint",256,NULL,2,NULL);
     //xTaskCreate(task_monitor_gpio,"boton",256,NULL,2,NULL);
     xTaskCreate(task_hcsr04,"MedicionDeDistancia",256,NULL,2,NULL);
@@ -1015,7 +908,6 @@ int main(void)
     xTaskCreate(task_rtc,"regsitro_fecha",256,NULL,2,NULL);
     xTaskCreate(task_pid,"control_pid",256,NULL,3,NULL);
     xTaskCreate(task_setpoint_uart, "UART_Receiver", 1024, NULL, 2, NULL);
->>>>>>> 1f5dba881d209f6cae4df136e52be0351c8e6ae8
 
     // Arranca el scheduler
     vTaskStartScheduler();
